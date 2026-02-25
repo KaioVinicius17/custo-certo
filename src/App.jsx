@@ -16,13 +16,13 @@ import {
 // --- CONFIGURAÇÃO FIREBASE ---
 // Substitua pelas chaves do seu projeto ao fazer o deploy
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY",
-  authDomain: "seu-projeto.firebaseapp.com",
-  projectId: "seu-projeto",
-  storageBucket: "seu-projeto.appspot.com",
-  messagingSenderId: "123456",
-  appId: "seu-app-id"
-};
+  apiKey: "AIzaSyDSaBnGk5bW3WkGLA8T8kThrtEFFhVdjck",
+  authDomain: "custocerto-eb1ab.firebaseapp.com",
+  projectId: "custocerto-eb1ab",
+  storageBucket: "custocerto-eb1ab.firebasestorage.app",
+  messagingSenderId: "530648528302",
+  appId: "1:530648528302:web:f149157e8bc64cc098c43f"
+}; 
 
 let app, db, auth;
 try {
