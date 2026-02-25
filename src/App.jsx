@@ -16,12 +16,12 @@ import {
 // --- CONFIGURAÇÃO FIREBASE ---
 // Substitua pelas chaves do seu projeto ao fazer o deploy
 const firebaseConfig = {
-  apiKey: "AIzaSyDSaBnGk5bW3WkGLA8T8kThrtEFFhVdjck",
-  authDomain: "custocerto-eb1ab.firebaseapp.com",
-  projectId: "custocerto-eb1ab",
-  storageBucket: "custocerto-eb1ab.firebasestorage.app",
-  messagingSenderId: "530648528302",
-  appId: "1:530648528302:web:f149157e8bc64cc098c43f"
+  apiKey: "SUA_API_KEY",
+  authDomain: "seu-projeto.firebaseapp.com",
+  projectId: "seu-projeto",
+  storageBucket: "seu-projeto.appspot.com",
+  messagingSenderId: "123456",
+  appId: "seu-app-id"
 };
 
 let app, db, auth;
@@ -58,14 +58,14 @@ const Button = ({ children, onClick, variant = 'primary', className = '', icon: 
   );
 };
 
-const Input = ({ label, type = 'text', value, onChange, placeholder, className = '', prefix, suffix, required, icon: Icon }) => (
+const Input = ({ label, type = 'text', value, onChange, placeholder, className = '', prefix, suffix, required, icon: Icon, name, defaultValue, min, step }) => (
   <div className={`flex flex-col gap-1 ${className}`}>
     {label && <label className="text-sm font-medium text-slate-700 dark:text-slate-300">{label} {required && '*'}</label>}
     <div className="relative flex items-center">
       {prefix && <span className="absolute left-3 text-slate-400 text-sm">{prefix}</span>}
       {Icon && <Icon size={18} className="absolute left-3 text-slate-400" />}
       <input
-        type={type} value={value} onChange={onChange} placeholder={placeholder} required={required}
+        type={type} name={name} value={value} defaultValue={defaultValue} onChange={onChange} placeholder={placeholder} required={required} min={min} step={step}
         className={`w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all
           ${prefix || Icon ? 'pl-10' : ''} ${suffix ? 'pr-8' : ''}`}
       />
@@ -501,7 +501,7 @@ const IngredientsView = ({ ingredients, onSave, onDelete }) => {
   const [editingIngredient, setEditingIngredient] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const filtered = ingredients.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filtered = ingredients.filter(i => (i.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
@@ -553,7 +553,7 @@ const IngredientsView = ({ ingredients, onSave, onDelete }) => {
                   <td className="p-4 text-right font-medium text-emerald-600 dark:text-emerald-400">{formatCurrency(ing.unitCost)} / {ing.unit}</td>
                   <td className="p-4 text-center">
                     <div className="flex justify-center gap-2">
-                      <button onClick={() => openEdit(ing)} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 size={18}/></button>
+                      <button onClick={() => setEditingIngredient(ing) || setIsModalOpen(true)} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 size={18}/></button>
                       <button onClick={() => { if(window.confirm('Excluir?')) onDelete(ing.id); }} className="p-2 text-slate-400 hover:text-rose-600"><Trash2 size={18}/></button>
                     </div>
                   </td>
@@ -603,6 +603,7 @@ const IngredientsView = ({ ingredients, onSave, onDelete }) => {
 
 const RecipesView = ({ recipes, ingredients, calculateRecipeCosts, onSave, onDelete }) => {
   const [editingRecipe, setEditingRecipe] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   if (editingRecipe) {
     return <RecipeForm 
@@ -612,6 +613,8 @@ const RecipesView = ({ recipes, ingredients, calculateRecipeCosts, onSave, onDel
             />;
   }
 
+  const filteredRecipes = recipes.filter(r => (r.name || '').toLowerCase().includes(searchTerm.toLowerCase()));
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
@@ -619,26 +622,51 @@ const RecipesView = ({ recipes, ingredients, calculateRecipeCosts, onSave, onDel
         <Button onClick={() => setEditingRecipe({ id: generateId(), name: '', yield: 1, ingredients: [], desiredMargin: 40 })} icon={Plus}>Nova Ficha</Button>
       </header>
 
+      <Card className="p-4 mb-6">
+        <div className="flex gap-4 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+          <input 
+            type="text" 
+            placeholder="Buscar ficha técnica..." 
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)} 
+            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-10 pr-4 py-2 focus:ring-2 focus:ring-emerald-500 outline-none" 
+          />
+        </div>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {recipes.map(recipe => {
-          const costs = calculateRecipeCosts(recipe);
-          return (
-            <Card key={recipe.id} className="hover:shadow-md transition-shadow flex flex-col h-full">
-              <div className="p-5 border-b border-slate-100 dark:border-slate-800">
-                <h3 className="font-bold text-lg leading-tight">{recipe.name}</h3>
-                <p className="text-sm text-slate-500 mt-1">Rende: {recipe.yield} und</p>
-              </div>
-              <div className="p-5 flex-1 space-y-4">
-                <div className="flex justify-between items-center text-sm"><span className="text-slate-500">Custo Unit.</span><span className="font-medium">{formatCurrency(costs.unitCost)}</span></div>
-                <div className="flex justify-between items-center text-sm"><span className="text-slate-500">Preço Sugerido</span><span className="font-bold text-emerald-600">{formatCurrency(costs.finalSalePrice)}</span></div>
-              </div>
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl flex justify-between">
-                <Button variant="ghost" onClick={() => { if(window.confirm('Excluir?')) onDelete(recipe.id); }} className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2"><Trash2 size={18} /></Button>
-                <Button variant="secondary" onClick={() => setEditingRecipe(recipe)} icon={Edit2}>Editar</Button>
-              </div>
-            </Card>
-          );
-        })}
+        {filteredRecipes.length === 0 ? (
+          <div className="col-span-full py-16 flex flex-col items-center justify-center text-slate-500 bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+            <Calculator size={48} className="mb-4 opacity-20 text-slate-400" />
+            <p className="text-lg font-medium text-slate-700 dark:text-slate-300">
+              {recipes.length === 0 ? 'Nenhuma ficha técnica cadastrada.' : 'Nenhuma ficha encontrada na busca.'}
+            </p>
+            <p className="text-sm mt-1 text-slate-500">
+              {recipes.length === 0 ? 'Clique em "Nova Ficha" no topo da tela para começar.' : 'Tente usar palavras-chave diferentes.'}
+            </p>
+          </div>
+        ) : (
+          filteredRecipes.map(recipe => {
+            const costs = calculateRecipeCosts(recipe);
+            return (
+              <Card key={recipe.id} className="hover:shadow-md transition-shadow flex flex-col h-full">
+                <div className="p-5 border-b border-slate-100 dark:border-slate-800">
+                  <h3 className="font-bold text-lg leading-tight">{recipe.name}</h3>
+                  <p className="text-sm text-slate-500 mt-1">Rende: {recipe.yield} und</p>
+                </div>
+                <div className="p-5 flex-1 space-y-4">
+                  <div className="flex justify-between items-center text-sm"><span className="text-slate-500">Custo Unit.</span><span className="font-medium">{formatCurrency(costs.unitCost)}</span></div>
+                  <div className="flex justify-between items-center text-sm"><span className="text-slate-500">Preço Sugerido</span><span className="font-bold text-emerald-600">{formatCurrency(costs.finalSalePrice)}</span></div>
+                </div>
+                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl flex justify-between">
+                  <Button variant="ghost" onClick={() => { if(window.confirm('Excluir?')) onDelete(recipe.id); }} className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2"><Trash2 size={18} /></Button>
+                  <Button variant="secondary" onClick={() => setEditingRecipe(recipe)} icon={Edit2}>Editar</Button>
+                </div>
+              </Card>
+            );
+          })
+        )}
       </div>
     </div>
   );
