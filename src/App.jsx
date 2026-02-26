@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   LayoutDashboard, Wheat, ChefHat, Settings, Plus, Trash2, Edit2, Save, X, Moon, Sun, 
   Calculator, TrendingUp, AlertCircle, Printer, Download, Search, ChevronRight, 
-  PieChart, DollarSign, Loader2, LogOut, Mail, Lock, User
+  PieChart, DollarSign, Loader2, LogOut, Mail, Lock, User, Store, Truck
 } from 'lucide-react';
 
 // IMPORTAÇÕES DO FIREBASE (Configurado internamente para testes)
@@ -10,7 +10,8 @@ import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, setDoc, doc, deleteDoc } from 'firebase/firestore';
 import { 
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut 
+  createUserWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, signOut,
+  signInAnonymously 
 } from 'firebase/auth';
 
 // --- CONFIGURAÇÃO FIREBASE ---
@@ -22,7 +23,7 @@ const firebaseConfig = {
   storageBucket: "custocerto-eb1ab.firebasestorage.app",
   messagingSenderId: "530648528302",
   appId: "1:530648528302:web:f149157e8bc64cc098c43f"
-}; 
+};
 
 let app, db, auth;
 try {
@@ -111,6 +112,17 @@ const AuthScreen = () => {
     }
   };
 
+  const handleGuestAuth = async () => {
+    setError('');
+    setLoading(true);
+    try {
+      await signInAnonymously(auth);
+    } catch (err) {
+      setError('Erro ao entrar como visitante. Verifique se o login Anônimo está ativado no Firebase.');
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center p-4">
       <Card className="w-full max-w-md p-8">
@@ -157,6 +169,14 @@ const AuthScreen = () => {
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" /><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" /><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" /><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" /></svg>
             Google
+          </button>
+
+          <button 
+            onClick={handleGuestAuth} disabled={loading}
+            className="mt-3 w-full flex items-center justify-center gap-3 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors font-medium"
+          >
+            <User size={20} />
+            Entrar como Visitante
           </button>
         </div>
 
@@ -295,19 +315,30 @@ export default function App() {
     const totalCost = costWithLoss + totalPackagingCost;
     const unitCost = totalCost / (Number(recipe.yield) || 1);
     
-    let suggestedPrice = 0;
-    const marginDec = Number(recipe.desiredMargin || 0) / 100;
-    
-    if (marginDec >= 1) suggestedPrice = unitCost * (1 + marginDec);
-    else suggestedPrice = unitCost / (1 - marginDec);
+    // --- VAREJO (Retail) ---
+    const marginRetailDec = Number(recipe.retailMargin ?? recipe.desiredMargin ?? 40) / 100;
+    let suggestedRetail = marginRetailDec >= 1 ? unitCost * (1 + marginRetailDec) : unitCost / (1 - marginRetailDec);
+    const finalRetail = recipe.manualRetailPrice > 0 ? Number(recipe.manualRetailPrice) : (recipe.manualSalePrice > 0 ? Number(recipe.manualSalePrice) : suggestedRetail);
+    const cmvRetail = finalRetail > 0 ? (unitCost / finalRetail) * 100 : 0;
+    const profitRetail = finalRetail - unitCost;
+    const actualMarginRetail = finalRetail > 0 ? (profitRetail / finalRetail) * 100 : 0;
 
-    const finalSalePrice = recipe.manualSalePrice > 0 ? Number(recipe.manualSalePrice) : suggestedPrice;
-    const cmvPercent = finalSalePrice > 0 ? (unitCost / finalSalePrice) * 100 : 0;
-    const unitProfit = finalSalePrice - unitCost;
-    const totalProfit = unitProfit * Number(recipe.yield || 1);
-    const actualMargin = finalSalePrice > 0 ? (unitProfit / finalSalePrice) * 100 : 0;
+    // --- ATACADO (Wholesale) ---
+    const marginWholesaleDec = Number(recipe.wholesaleMargin ?? 20) / 100;
+    let suggestedWholesale = marginWholesaleDec >= 1 ? unitCost * (1 + marginWholesaleDec) : unitCost / (1 - marginWholesaleDec);
+    const finalWholesale = recipe.manualWholesalePrice > 0 ? Number(recipe.manualWholesalePrice) : suggestedWholesale;
+    const cmvWholesale = finalWholesale > 0 ? (unitCost / finalWholesale) * 100 : 0;
+    const profitWholesale = finalWholesale - unitCost;
+    const actualMarginWholesale = finalWholesale > 0 ? (profitWholesale / finalWholesale) * 100 : 0;
 
-    return { totalIngredientsCost, totalCost, unitCost, suggestedPrice, finalSalePrice, cmvPercent, unitProfit, totalProfit, actualMargin };
+    return { 
+      totalIngredientsCost, totalCost, unitCost, 
+      suggestedRetail, finalRetail, cmvRetail, profitRetail, actualMarginRetail,
+      suggestedWholesale, finalWholesale, cmvWholesale, profitWholesale, actualMarginWholesale,
+      // Fallback legado para o Dashboard
+      suggestedPrice: suggestedRetail, finalSalePrice: finalRetail, cmvPercent: cmvRetail, 
+      unitProfit: profitRetail, totalProfit: profitRetail * Number(recipe.yield || 1), actualMargin: actualMarginRetail 
+    };
   };
 
   return (
@@ -333,7 +364,7 @@ export default function App() {
             <div className="bg-emerald-100 text-emerald-600 p-2 rounded-full"><User size={18} /></div>
             <div className="flex-1 overflow-hidden">
                <p className="text-xs text-slate-500 font-medium">Conectado como:</p>
-               <p className="text-sm font-semibold truncate" title={user.email}>{user.email}</p>
+               <p className="text-sm font-semibold truncate" title={user.email || 'Visitante'}>{user.isAnonymous ? 'Visitante' : user.email}</p>
             </div>
           </div>
           
@@ -435,25 +466,27 @@ const DashboardView = ({ recipes, ingredients, calculateRecipeCosts }) => {
                 <tr className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 text-sm uppercase tracking-wider">
                   <th className="p-4 font-semibold whitespace-nowrap">Produto</th>
                   <th className="p-4 font-semibold whitespace-nowrap">Custo Unit.</th>
-                  <th className="p-4 font-semibold whitespace-nowrap">Preço Venda</th>
-                  <th className="p-4 font-semibold whitespace-nowrap">Lucro Unit.</th>
-                  <th className="p-4 font-semibold whitespace-nowrap">CMV</th>
-                  <th className="p-4 font-semibold whitespace-nowrap min-w-[150px]">Margem</th>
+                  <th className="p-4 font-semibold whitespace-nowrap text-emerald-600">Varejo</th>
+                  <th className="p-4 font-semibold whitespace-nowrap text-indigo-600">Atacado</th>
+                  <th className="p-4 font-semibold whitespace-nowrap">Lucro (Varejo)</th>
+                  <th className="p-4 font-semibold whitespace-nowrap">CMV (Varejo)</th>
+                  <th className="p-4 font-semibold whitespace-nowrap min-w-[150px]">Margem (Varejo)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-700">
-                {recipes.length === 0 && (<tr><td colSpan="6" className="p-8 text-center text-slate-500">Nenhuma receita cadastrada ainda.</td></tr>)}
+                {recipes.length === 0 && (<tr><td colSpan="7" className="p-8 text-center text-slate-500">Nenhuma receita cadastrada ainda.</td></tr>)}
                 {recipes.map(recipe => {
                   const costs = calculateRecipeCosts(recipe);
-                  const isHighCmv = costs.cmvPercent > 35;
+                  const isHighCmv = costs.cmvRetail > 35;
                   return (
                     <tr key={recipe.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                       <td className="p-4 font-medium whitespace-nowrap">{recipe.name}</td>
                       <td className="p-4 whitespace-nowrap">{formatCurrency(costs.unitCost)}</td>
-                      <td className="p-4 text-emerald-600 dark:text-emerald-400 font-medium whitespace-nowrap">{formatCurrency(costs.finalSalePrice)}</td>
-                      <td className="p-4 text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(costs.unitProfit)}</td>
+                      <td className="p-4 text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">{formatCurrency(costs.finalRetail)}</td>
+                      <td className="p-4 text-indigo-600 dark:text-indigo-400 font-bold whitespace-nowrap">{formatCurrency(costs.finalWholesale)}</td>
+                      <td className="p-4 text-emerald-600 dark:text-emerald-400 whitespace-nowrap">{formatCurrency(costs.profitRetail)}</td>
                       <td className={`p-4 font-medium whitespace-nowrap ${isHighCmv ? 'text-rose-500' : 'text-slate-600 dark:text-slate-300'}`}>
-                        {formatPercent(costs.cmvPercent)}
+                        {formatPercent(costs.cmvRetail)}
                       </td>
                       <td className="p-4">
                         <div className="flex items-center gap-2">
@@ -619,7 +652,7 @@ const RecipesView = ({ recipes, ingredients, calculateRecipeCosts, onSave, onDel
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
         <div><h2 className="text-3xl font-bold">Fichas Técnicas</h2></div>
-        <Button onClick={() => setEditingRecipe({ id: generateId(), name: '', yield: 1, ingredients: [], desiredMargin: 40 })} icon={Plus}>Nova Ficha</Button>
+        <Button onClick={() => setEditingRecipe({ id: generateId(), name: '', yield: 1, ingredients: [], retailMargin: 40, wholesaleMargin: 20 })} icon={Plus}>Nova Ficha</Button>
       </header>
 
       <Card className="p-4 mb-6">
@@ -656,8 +689,9 @@ const RecipesView = ({ recipes, ingredients, calculateRecipeCosts, onSave, onDel
                   <p className="text-sm text-slate-500 mt-1">Rende: {recipe.yield} und</p>
                 </div>
                 <div className="p-5 flex-1 space-y-4">
-                  <div className="flex justify-between items-center text-sm"><span className="text-slate-500">Custo Unit.</span><span className="font-medium">{formatCurrency(costs.unitCost)}</span></div>
-                  <div className="flex justify-between items-center text-sm"><span className="text-slate-500">Preço Sugerido</span><span className="font-bold text-emerald-600">{formatCurrency(costs.finalSalePrice)}</span></div>
+                  <div className="flex justify-between items-center text-sm"><span className="text-slate-500">Custo Unitário</span><span className="font-medium">{formatCurrency(costs.unitCost)}</span></div>
+                  <div className="flex justify-between items-center text-sm"><span className="text-slate-500 flex items-center gap-1"><Store size={14}/> Varejo</span><span className="font-bold text-emerald-600">{formatCurrency(costs.finalRetail)}</span></div>
+                  <div className="flex justify-between items-center text-sm"><span className="text-slate-500 flex items-center gap-1"><Truck size={14}/> Atacado</span><span className="font-bold text-indigo-600">{formatCurrency(costs.finalWholesale)}</span></div>
                 </div>
                 <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-b-xl flex justify-between">
                   <Button variant="ghost" onClick={() => { if(window.confirm('Excluir?')) onDelete(recipe.id); }} className="text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2"><Trash2 size={18} /></Button>
@@ -673,7 +707,13 @@ const RecipesView = ({ recipes, ingredients, calculateRecipeCosts, onSave, onDel
 };
 
 const RecipeForm = ({ recipe, ingredients, onSave, onCancel, calculateCosts }) => {
-  const [formData, setFormData] = useState({ ...recipe, manualSalePrice: recipe.manualSalePrice || 0 });
+  const [formData, setFormData] = useState({ 
+    ...recipe, 
+    retailMargin: recipe.retailMargin ?? recipe.desiredMargin ?? 40,
+    wholesaleMargin: recipe.wholesaleMargin ?? 20,
+    manualRetailPrice: recipe.manualRetailPrice ?? recipe.manualSalePrice ?? 0,
+    manualWholesalePrice: recipe.manualWholesalePrice ?? 0
+  });
   const [liveCosts, setLiveCosts] = useState(() => calculateCosts(recipe));
   const [isSaving, setIsSaving] = useState(false);
 
@@ -721,6 +761,22 @@ const RecipeForm = ({ recipe, ingredients, onSave, onCancel, calculateCosts }) =
             ))}
           </div>
         </Card>
+
+        <Card className="p-6 space-y-4 mt-6">
+          <h3 className="font-bold text-lg border-b border-slate-100 dark:border-slate-800 pb-2">Estratégia de Preços (Varejo vs. Atacado)</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4 p-4 border border-emerald-100 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-xl">
+              <h4 className="font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-2"><Store size={18}/> Venda no Varejo</h4>
+              <Input label="Margem Desejada (%)" type="number" step="0.1" value={formData.retailMargin} onChange={(e) => updateField('retailMargin', e.target.value)} />
+              <Input label="Forçar Preço Manual (R$)" type="number" step="0.01" value={formData.manualRetailPrice} onChange={(e) => updateField('manualRetailPrice', e.target.value)} />
+            </div>
+            <div className="space-y-4 p-4 border border-indigo-100 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-xl">
+              <h4 className="font-semibold text-indigo-700 dark:text-indigo-400 flex items-center gap-2"><Truck size={18}/> Venda no Atacado</h4>
+              <Input label="Margem Desejada (%)" type="number" step="0.1" value={formData.wholesaleMargin} onChange={(e) => updateField('wholesaleMargin', e.target.value)} />
+              <Input label="Forçar Preço Manual (R$)" type="number" step="0.01" value={formData.manualWholesalePrice} onChange={(e) => updateField('manualWholesalePrice', e.target.value)} />
+            </div>
+          </div>
+        </Card>
       </div>
 
       <div className="w-full lg:w-96 flex flex-col gap-4">
@@ -729,11 +785,22 @@ const RecipeForm = ({ recipe, ingredients, onSave, onCancel, calculateCosts }) =
           <div className="space-y-4">
             <div className="flex justify-between border-b border-slate-700 pb-3"><span className="text-sm text-slate-400">Custo Total</span><span className="text-xl font-medium">{formatCurrency(liveCosts.totalCost)}</span></div>
             <div className="flex justify-between border-b border-slate-700 pb-3"><span className="text-sm text-slate-400">Custo Unitário</span><span className="text-xl font-bold text-amber-400">{formatCurrency(liveCosts.unitCost)}</span></div>
-            <div className="bg-slate-800 rounded-lg p-4">
-              <span className="text-xs text-slate-400 uppercase">Preço Sugerido</span>
-              <div className="text-3xl font-black text-emerald-400 break-all">{formatCurrency(liveCosts.finalSalePrice)}</div>
+            
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-emerald-900/30 border border-emerald-800/50 rounded-lg p-3">
+                <span className="text-xs text-emerald-400 uppercase flex items-center gap-1 mb-1"><Store size={12}/> Varejo</span>
+                <div className="text-xl font-black text-white break-all">{formatCurrency(liveCosts.finalRetail)}</div>
+                <div className="mt-2 text-xs text-slate-400 flex justify-between"><span>Lucro:</span> <span className="text-emerald-400">{formatCurrency(liveCosts.profitRetail)}</span></div>
+                <div className="text-xs text-slate-400 flex justify-between"><span>CMV:</span> <span className={liveCosts.cmvRetail > 35 ? 'text-rose-400' : 'text-slate-300'}>{formatPercent(liveCosts.cmvRetail)}</span></div>
+              </div>
+
+              <div className="bg-indigo-900/30 border border-indigo-800/50 rounded-lg p-3">
+                <span className="text-xs text-indigo-400 uppercase flex items-center gap-1 mb-1"><Truck size={12}/> Atacado</span>
+                <div className="text-xl font-black text-white break-all">{formatCurrency(liveCosts.finalWholesale)}</div>
+                <div className="mt-2 text-xs text-slate-400 flex justify-between"><span>Lucro:</span> <span className="text-indigo-400">{formatCurrency(liveCosts.profitWholesale)}</span></div>
+                <div className="text-xs text-slate-400 flex justify-between"><span>CMV:</span> <span className={liveCosts.cmvWholesale > 35 ? 'text-rose-400' : 'text-slate-300'}>{formatPercent(liveCosts.cmvWholesale)}</span></div>
+              </div>
             </div>
-            <Input label="Margem Desejada (%)" type="number" step="0.1" value={formData.desiredMargin} onChange={(e) => updateField('desiredMargin', e.target.value)} className="mt-4" />
           </div>
         </Card>
         <div className="flex gap-3">
